@@ -1,7 +1,14 @@
-# ===== 仅展示测试代码：屏蔽后端/前端/资源 =====
-springboot/
+# ===== 屏蔽前端/资源目录 =====
 vue/
 files/
+
+# ===== Spring Boot 构建产物（源码保留，供 CI 构建） =====
+springboot/target/
+springboot/mvnw
+springboot/mvnw.cmd
+springboot/.mvn/
+springboot/app.err.log
+springboot/app.log
 
 # ===== Python =====
 __pycache__/
