@@ -1,0 +1,140 @@
+# ====================================================================
+# 权限矩阵：接口 × 三角色（正向授权 / 反向拒绝）
+# auth_required: true 表示需要鉴权
+# allowed_roles: [ADMIN, BUSINESS, USER] 中的哪些角色允许访问
+#   - None / 空数组：在白名单内，任意(含匿名)都能访问
+# ====================================================================
+
+public_interfaces:
+  - name: "首页 /"
+    method: GET
+    path: "/"
+    auth_required: false
+    allowed_roles: []
+  - name: "登录接口"
+    method: POST
+    path: "/login"
+    body: { username: "admin", password: "admin", role: "ADMIN" }
+    auth_required: false
+    allowed_roles: []
+  - name: "注册接口"
+    method: POST
+    path: "/register"
+    body: { username: "permtest_temp", password: "123456", role: "USER" }
+    auth_required: false
+    allowed_roles: []
+  - name: "公告selectAll（公开）"
+    method: GET
+    path: "/notice/selectAll"
+    auth_required: false
+    allowed_roles: []
+  - name: "商品selectPage（公开）"
+    method: GET
+    path: "/goods/selectPage"
+    params: { pageNum: 1, pageSize: 5 }
+    auth_required: false
+    allowed_roles: []
+  - name: "商品selectById（公开）"
+    method: GET
+    path: "/goods/selectById"
+    params: { id: 1 }
+    auth_required: false
+    allowed_roles: []
+  - name: "分类Type selectAll（公开）"
+    method: GET
+    path: "/type/selectAll"
+    auth_required: false
+    allowed_roles: []
+  - name: "商品评论selectByGoodsId（公开）"
+    method: GET
+    path: "/comment/selectByGoodsId"
+    params: { id: 1 }
+    auth_required: false
+    allowed_roles: []
+  - name: "商品 add（goods/** 白名单放行）"
+    method: POST
+    path: "/goods/add"
+    body: { name: "权限测试商品", price: 9.9, count: 100, unit: "件", typeId: 1, businessId: 1 }
+    auth_required: false
+    allowed_roles: []
+
+protected_interfaces:
+  # ---------- 管理员模块（只允许 ADMIN）----------
+  - name: "管理员管理 - selectPage"
+    method: GET
+    path: "/admin/selectPage"
+    params: { pageNum: 1, pageSize: 5 }
+    auth_required: true
+    allowed_roles: [ADMIN]
+  - name: "管理员管理 - add"
+    method: POST
+    path: "/admin/add"
+    body: { username: "admintest001", password: "123456", name: "临时" }
+    auth_required: true
+    allowed_roles: [ADMIN]
+
+  # ---------- 商家模块（ADMIN 全权）----------
+  - name: "商家管理 - selectPage"
+    method: GET
+    path: "/business/selectPage"
+    params: { pageNum: 1, pageSize: 5 }
+    auth_required: true
+    allowed_roles: [ADMIN]
+  - name: "商家管理 - add"
+    method: POST
+    path: "/business/add"
+    body: { username: "bustest001", password: "123456", name: "临时商家" }
+    auth_required: true
+    allowed_roles: [ADMIN]
+
+  # ---------- 用户模块（ADMIN 全权）----------
+  - name: "用户管理 - selectPage"
+    method: GET
+    path: "/user/selectPage"
+    params: { pageNum: 1, pageSize: 5 }
+    auth_required: true
+    allowed_roles: [ADMIN]
+  - name: "用户管理 - add"
+    method: POST
+    path: "/user/add"
+    body: { username: "usertest001", password: "123456", name: "临时用户" }
+    auth_required: true
+    allowed_roles: [ADMIN]
+
+  # ---------- 购物车（受保护，需JWT）----------
+  - name: "购物车 selectAll"
+    method: GET
+    path: "/cart/selectAll"
+    auth_required: true
+    allowed_roles: [USER]
+  - name: "购物车 add"
+    method: POST
+    path: "/cart/add"
+    body: { userId: 1, businessId: 1, goodsId: 1, num: 1 }
+    auth_required: true
+    allowed_roles: [USER]
+
+  # ---------- 订单模块（受保护，需JWT）----------
+  - name: "订单 selectPage（按角色过滤）"
+    method: GET
+    path: "/orders/selectPage"
+    params: { pageNum: 1, pageSize: 5 }
+    auth_required: true
+    allowed_roles: [ADMIN, BUSINESS, USER]
+  - name: "订单 add（下单）"
+    method: POST
+    path: "/orders/add"
+    body:
+      userId: 1
+      addressId: 1
+      status: "待发货"
+      cartData: []
+    auth_required: true
+    allowed_roles: [USER]
+
+  # ---------- 地址模块（受保护，需JWT）----------
+  - name: "地址 selectAll"
+    method: GET
+    path: "/address/selectAll"
+    auth_required: true
+    allowed_roles: [USER]

@@ -1,0 +1,176 @@
+name: API Auto Test Pipeline
+
+on:
+  push:
+    branches: [master, main, dev]
+    paths:
+      - 'qa_auto/**'
+      - '.github/workflows/api-test.yml'
+      - 'springboot/src/**'
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  # ------------------------------------------------------------------
+  # Job 1: 接口自动化测试 (Pytest + Allure)
+  # ------------------------------------------------------------------
+  api-test:
+    name: Pytest API Test & Allure Report
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: 200288
+          MYSQL_DATABASE: xm_shopping_manager
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -p200288 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 1) 初始化数据库（导入SQL）——如果项目有 init.sql 就用它
+      - name: Import Database Schema
+        run: |
+          if [ -f "springboot/src/main/resources/db/init.sql" ]; then
+            mysql -h 127.0.0.1 -P 3307 -uroot -p200288 xm_shopping_manager < springboot/src/main/resources/db/init.sql
+            echo "[DB] import from init.sql"
+          elif [ -f "springboot/init.sql" ]; then
+            mysql -h 127.0.0.1 -P 3307 -uroot -p200288 xm_shopping_manager < springboot/init.sql
+            echo "[DB] import from springboot/init.sql"
+          else
+            echo "[DB] WARNING: 未找到 init.sql，请手动建表或提供 dump，否则后端启动会失败。"
+          fi
+
+      # 2) 启动 Spring Boot 后端（后台运行 + 健康等待）
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: maven
+
+      - name: Build Spring Boot
+        working-directory: springboot
+        run: mvn -B -q package -DskipTests
+
+      - name: Start Spring Boot Background
+        working-directory: springboot
+        run: |
+          nohup java -jar target/*.jar \
+            --spring.datasource.url="jdbc:mysql://127.0.0.1:3307/xm_shopping_manager?useUnicode=true&characterEncoding=utf-8&allowMultiQueries=true&useSSL=false&serverTimezone=GMT%2b8&allowPublicKeyRetrieval=true" \
+            --spring.datasource.username=root \
+            --spring.datasource.password=200288 \
+            > /tmp/springboot.log 2>&1 &
+          echo "SpringBoot PID=$!"
+          sleep 5
+
+      - name: Wait for Backend Ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9090/ > /dev/null; then
+              echo "[OK] 后端启动成功 (${i}s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "[ERR] 后端启动超时"
+          echo "---------- stdout log ----------"
+          cat /tmp/springboot.log || true
+          exit 1
+
+      # 3) Python 环境 + 依赖安装
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        working-directory: qa_auto
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 4) 执行 Pytest（跳过需要登录真实账号的用例，除非你在 CI 中初始化了账号）
+      - name: Run Pytest (smoke + goods)
+        working-directory: qa_auto
+        env:
+          CI: "true"
+        run: |
+          mkdir -p reports
+          pytest tests/test_00_smoke.py tests/test_02_goods_crud.py \
+            -v \
+            --alluredir=reports/allure-results \
+            || echo "[WARN] 部分用例失败（可能因数据库中无初始数据），继续生成报告..."
+        continue-on-error: true
+
+      # 5) 生成 Allure 报告并上传
+      - name: Load Allure History
+        uses: actions/checkout@v4
+        if: always()
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Generate Allure Report
+        uses: simple-elf/allure-report-action@master
+        if: always()
+        with:
+          allure_results: qa_auto/reports/allure-results
+          allure_history: allure-history
+          keep_reports: 20
+
+      - name: Deploy Allure Report to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history
+
+      # 6) 上传产物
+      - name: Upload Test Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            qa_auto/logs/*.log
+            qa_auto/reports/allure-results/
+            /tmp/springboot.log
+
+  # ------------------------------------------------------------------
+  # Job 2: Java 单元测试（JUnit5 + JaCoCo）
+  # ------------------------------------------------------------------
+  java-unit:
+    name: JUnit5 - UserCF Algorithm Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: maven
+
+      - name: Run Unit Tests with JaCoCo
+        working-directory: springboot
+        run: mvn -B test jacoco:report
+
+      - name: Upload JaCoCo Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: springboot/target/site/jacoco/

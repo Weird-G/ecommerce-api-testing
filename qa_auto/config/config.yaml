@@ -1,0 +1,39 @@
+env:
+  base_url: "http://localhost:9090"
+  timeout: 15
+  retry_times: 3
+  retry_interval: 1
+
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "root"
+  password: "root"
+  database: "xm_shopping_manager"
+  charset: "utf8mb4"
+
+accounts:
+  admin:
+    username: "admin"
+    password: "123456"
+    role: "ADMIN"
+  business:
+    username: "零食茶酒进口食品"
+    password: "123456"
+    role: "BUSINESS"
+  user:
+    username: "zhangsan"
+    password: "123456"
+    role: "USER"
+
+test_data:
+  default_goods_id: 11        # 百草味菠萝干 (business_id=9, 零食茶酒)
+  default_business_id: 9     # 零食茶酒进口食品 （business_id=9）
+  default_user_id: 5         # zhangsan
+  default_address_id: 1      # zhangsan 的上海市浦东新区地址（address user_id=5）
+
+log:
+  level: "INFO"
+  file: "./logs/test_{time}.log"
+  rotation: "10 MB"
+  retention: "7 days"

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  JMeter 5.5+ 脚本
+  被测接口: GET /goods/selectPage?pageNum=1&pageSize=10  (商品分页 - 高频公开接口)
+  压测目标:
+    - 单机部署 50 并发 TPS >= 280
+    - 90% 响应时间 < 120ms
+    - 梯度加压定位性能拐点
+  执行: jmeter -n -t goods_select_page.jmx -l reports/jmeter/result.jtl -e -o reports/jmeter/dashboard
+-->
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.5">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="电商-商品分页接口压测" enabled="true">
+      <stringProp name="TestPlan.comments">商品 selectPage 接口基准压测 / 梯度加压 / 慢 SQL 定位</stringProp>
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="PROTOCOL" elementType="Argument"><stringProp name="Argument.name">PROTOCOL</stringProp><stringProp name="Argument.value">http</stringProp></elementProp>
+          <elementProp name="HOST" elementType="Argument"><stringProp name="Argument.name">HOST</stringProp><stringProp name="Argument.value">localhost</stringProp></elementProp>
+          <elementProp name="PORT" elementType="Argument"><stringProp name="Argument.name">PORT</stringProp><stringProp name="Argument.value">9090</stringProp></elementProp>
+          <elementProp name="PATH" elementType="Argument"><stringProp name="Argument.name">PATH</stringProp><stringProp name="Argument.value">/goods/selectPage</stringProp></elementProp>
+        </collectionProp>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <!-- ========= 1. HTTP 默认配置 ========= -->
+      <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="HTTP请求默认值">
+        <stringProp name="protocol">${PROTOCOL}</stringProp>
+        <stringProp name="server">${HOST}</stringProp>
+        <stringProp name="port">${PORT}</stringProp>
+        <stringProp name="content_encoding">UTF-8</stringProp>
+        <stringProp name="path">/</stringProp>
+      </ConfigTestElement>
+      <hashTree/>
+
+      <!-- ========= 2. CSV 参数化：pageNum / pageSize / name ========= -->
+      <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="CSV 分页参数">
+        <stringProp name="filename">jmeter/goods_params.csv</stringProp>
+        <stringProp name="variableNames">pageNum,pageSize,nameLike</stringProp>
+        <stringProp name="ignoreFirstLine">true</stringProp>
+        <stringProp name="recycle">true</stringProp>
+        <stringProp name="stopThread">false</stringProp>
+      </CSVDataSet>
+      <hashTree/>
+
+      <!-- ========= 3. 梯度加压线程组（Stepping Thread Group）=========
+           0用户起步 -> 每步加10用户 -> 最高到50并发 -> 保持2分钟 -> 每步降10用户
+           单步持续 30s，用于定位 TPS / RT 拐点               -->
+      <kg.apc.jmeter.threads.SteppingThreadGroup guiclass="kg.apc.jmeter.threads.SteppingThreadGroupGui"
+          testclass="kg.apc.jmeter.threads.SteppingThreadGroup"
+          testname="梯度加压 - 0→50并发" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <stringProp name="Start users count">10</stringProp>
+        <stringProp name="Start users count burst">10</stringProp>
+        <stringProp name="Start users period">30</stringProp>
+        <stringProp name="Stop users count">10</stringProp>
+        <stringProp name="Stop users period">5</stringProp>
+        <stringProp name="flighttime">120</stringProp>
+        <stringProp name="Total threads">50</stringProp>
+        <elementProp name="ThreadGroup.main_controller">
+          <hashTree>
+            <!-- 事务控制器：商品分页请求 -->
+            <TransactionController guiclass="TransactionControllerGui"
+                testclass="TransactionController" testname="Tx_商品分页查询" enabled="true">
+              <boolProp name="TransactionController.includeTimers">true</boolProp>
+            </TransactionController>
+            <hashTree>
+              <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy"
+                  testname="GET /goods/selectPage" enabled="true">
+                <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+                <stringProp name="HTTPSampler.port">${PORT}</stringProp>
+                <stringProp name="HTTPSampler.protocol">${PROTOCOL}</stringProp>
+                <stringProp name="HTTPSampler.path">${PATH}</stringProp>
+                <stringProp name="HTTPSampler.method">GET</stringProp>
+                <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+                <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+                  <collectionProp name="Arguments.arguments">
+                    <elementProp name="pageNum" elementType="HTTPArgument">
+                      <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                      <stringProp name="Argument.name">pageNum</stringProp>
+                      <stringProp name="Argument.value">${pageNum}</stringProp>
+                    </elementProp>
+                    <elementProp name="pageSize" elementType="HTTPArgument">
+                      <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                      <stringProp name="Argument.name">pageSize</stringProp>
+                      <stringProp name="Argument.value">${pageSize}</stringProp>
+                    </elementProp>
+                    <elementProp name="name" elementType="HTTPArgument">
+                      <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                      <stringProp name="Argument.name">name</stringProp>
+                      <stringProp name="Argument.value">${nameLike}</stringProp>
+                    </elementProp>
+                  </collectionProp>
+                </elementProp>
+              </HTTPSamplerProxy>
+              <hashTree>
+                <!-- 响应断言：code=200 -->
+                <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion"
+                    testname="断言 - 返回成功" enabled="true">
+                  <collectionProp name="Asserion.test_strings">
+                    <stringProp name="-59303257">&quot;code&quot;:&quot;200&quot;</stringProp>
+                  </collectionProp>
+                  <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+                  <stringProp name="Assertion.test_type">2</stringProp> <!-- contains -->
+                </ResponseAssertion>
+                <hashTree/>
+              </hashTree>
+            </hashTree>
+          </hashTree>
+        </elementProp>
+      </kg.apc.jmeter.threads.SteppingThreadGroup>
+      <hashTree/>
+
+      <!-- ========= 4. 基准线程组：50并发 保持3分钟 ========= -->
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="基准-50并发-3分钟" enabled="false">
+        <stringProp name="ThreadGroup.num_threads">50</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">15</stringProp>
+        <boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">180</stringProp>
+        <elementProp name="ThreadGroup.main_controller">
+          <hashTree>
+            <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy"
+                testname="GET /goods/selectPage 基准" enabled="true">
+              <stringProp name="HTTPSampler.path">${PATH}</stringProp>
+              <stringProp name="HTTPSampler.method">GET</stringProp>
+              <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+              <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+                <collectionProp name="Arguments.arguments">
+                  <elementProp name="pageNum" elementType="HTTPArgument">
+                    <stringProp name="Argument.name">pageNum</stringProp>
+                    <stringProp name="Argument.value">1</stringProp>
+                  </elementProp>
+                  <elementProp name="pageSize" elementType="HTTPArgument">
+                    <stringProp name="Argument.name">pageSize</stringProp>
+                    <stringProp name="Argument.value">10</stringProp>
+                  </elementProp>
+                </collectionProp>
+              </elementProp>
+            </HTTPSamplerProxy>
+            <hashTree>
+              <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="断言-code=200">
+                <collectionProp name="Asserion.test_strings">
+                  <stringProp name="-59303257">&quot;code&quot;:&quot;200&quot;</stringProp>
+                </collectionProp>
+                <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+                <stringProp name="Assertion.test_type">2</stringProp>
+              </ResponseAssertion>
+              <hashTree/>
+            </hashTree>
+          </hashTree>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree/>
+
+      <!-- ========= 5. 监听器 ========= -->
+      <SummaryReport guiclass="SummaryReportGui" testclass="SummaryReport" testname="聚合报告" enabled="true"/>
+      <hashTree/>
+      <ResultCollector guiclass="StatVisualizer" testclass="ResultCollector" testname="TPS/RT 汇总" enabled="true"/>
+      <hashTree/>
+      <!-- 如果装了 jmeter.backendlistener.async，可加 influxdb/grafana -->
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>

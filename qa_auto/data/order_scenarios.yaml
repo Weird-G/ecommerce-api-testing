@@ -1,0 +1,129 @@
+# ====================================================================
+# 下单链路 8 个业务场景定义
+# 测试数据已对齐数据库 xm_shopping_manager 中实际存在的商品:
+#   goods id=11 (白桃果脯,  price=15,  businessId=9,  count=1)  - 零食商
+#   goods id=12 (菠萝干,    price=20,  businessId=9,  count=6)  - 零食商
+#   goods id=14 (山核桃仁,  price=30,  businessId=9,  count=0)  - 零食商
+#   goods id=15 (鸭脖,      price=35,  businessId=9,  count=1)  - 零食商
+#   goods id=22 (森马开衫,  price=150, businessId=15, count=3)  - 服装商
+#   goods id=10 (MsShe外套, price=199, businessId=16, count=0)  - 大码女装商
+# 用户: zhangsan (userId=5), 地址 addressId=1 (上海, user_id=5)
+# ====================================================================
+scenarios:
+  - id: "OS_001"
+    name: "单商品下单（单购物车条目）"
+    description: "购物车里只有同一个商家的同一件商品，下单一笔，验证拆单后只有1条订单"
+    cart_items:
+      - goodsId: 11
+        businessId: 9
+        num: 1
+        goodsPrice: 15.0
+    expect_order_count: 1
+    expect_sales_delta: { "11": 1 }
+    expect_cart_cleared: true
+
+  - id: "OS_002"
+    name: "多商品合并下单（同商家）"
+    description: "同商家多件商品，生成多条订单记录，相同orderId"
+    cart_items:
+      - goodsId: 11
+        businessId: 9
+        num: 2
+        goodsPrice: 15.0
+      - goodsId: 12
+        businessId: 9
+        num: 1
+        goodsPrice: 20.0
+    expect_order_count: 2
+    expect_sales_delta: { "11": 2, "12": 1 }
+    expect_cart_cleared: true
+
+  - id: "OS_003"
+    name: "跨商家拆单"
+    description: "多商家商品，OrdersService 按 cart 条目逐条插入（自动按businessId拆），共享同一orderId前缀"
+    cart_items:
+      - goodsId: 11
+        businessId: 9
+        num: 1
+        goodsPrice: 15.0
+      - goodsId: 10
+        businessId: 16
+        num: 1
+        goodsPrice: 199.0
+    expect_order_count: 2
+    expect_business_ids: [9, 16]
+    expect_sales_delta: { "11": 1, "10": 1 }
+    expect_cart_cleared: true
+
+  - id: "OS_004"
+    name: "数量>1 销量累加正确"
+    description: "购买数量为5，验证商品count字段+5"
+    cart_items:
+      - goodsId: 15
+        businessId: 9
+        num: 5
+        goodsPrice: 35.0
+    expect_order_count: 1
+    expect_sales_delta: { "15": 5 }
+    expect_cart_cleared: true
+
+  - id: "OS_005"
+    name: "下单后购物车条目被删除"
+    description: "OrdersService.add 删除下单过的 cart.id"
+    cart_items:
+      - goodsId: 11
+        businessId: 9
+        num: 2
+        goodsPrice: 15.0
+      - goodsId: 12
+        businessId: 9
+        num: 1
+        goodsPrice: 20.0
+    expect_order_count: 2
+    expect_cart_cleared: true
+
+  - id: "OS_006"
+    name: "订单金额计算正确性（price = num * goodsPrice）"
+    description: "OrdersService.setPrice(num * goodsPrice) 落库校验"
+    cart_items:
+      - goodsId: 14
+        businessId: 9
+        num: 3
+        goodsPrice: 30.0
+    expect_order_count: 1
+    expect_total_price: 90.0
+    expect_sales_delta: { "14": 3 }
+    expect_cart_cleared: true
+
+  - id: "OS_007"
+    name: "重复加购去重后的下单（num合并后下单）"
+    description: "同一商品两次加购后在cart里应合并为一个条目（本项目无合并逻辑，此处仅验证下单时按实际cart逐条插入）"
+    cart_items:
+      - goodsId: 22
+        businessId: 15
+        num: 3
+        goodsPrice: 150.0
+    expect_order_count: 1
+    expect_sales_delta: { "22": 3 }
+    expect_cart_cleared: true
+
+  - id: "OS_008"
+    name: "三表事务一致性（订单+商品销量+购物车删除）"
+    description: "一次下单，订单表插入条数=N，商品表count累加正确，购物车表对应id被删除"
+    cart_items:
+      - goodsId: 11
+        businessId: 9
+        num: 1
+        goodsPrice: 15.0
+      - goodsId: 12
+        businessId: 9
+        num: 2
+        goodsPrice: 20.0
+      - goodsId: 10
+        businessId: 16
+        num: 1
+        goodsPrice: 199.0
+    expect_order_count: 3
+    expect_sales_delta: { "11": 1, "12": 2, "10": 1 }
+    expect_cart_cleared: true
+    expect_three_table_consistency: true

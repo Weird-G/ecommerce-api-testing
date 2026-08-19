@@ -1,0 +1,26 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyc
+qa_auto/venv/
+.venv/
+venv/
+
+# ===== Java / Maven 构建产物 =====
+springboot/target/
+*.class
+
+# ===== 测试报告生成物（由 CI 生成到 gh-pages / artifact，不入主分支） =====
+qa_auto/reports/allure-results/
+qa_auto/reports/allure-report/
+qa_auto/logs/
+*.log
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+
+# ===== OS =====
+Thumbs.db
+.DS_Store
