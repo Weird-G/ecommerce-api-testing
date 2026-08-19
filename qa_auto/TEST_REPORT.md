@@ -2,7 +2,7 @@
 
 > 测试对象：基于 SpringBoot 2.5.9 + Vue2 + MySQL 的电商系统（三角色权限 / 商品订单 / UserCF 推荐）
 > 技术栈：Python · Pytest · Requests · Allure · JUnit5 · JaCoCo · GitHub Actions
-> 报告生成时间：2026-08-19（北京时间）
+
 
 ---
 
