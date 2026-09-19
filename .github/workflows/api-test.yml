@@ -91,33 +91,52 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Debug Environment
+        run: |
+          set -x
+          echo "=== Runner info ==="
+          cat /etc/os-release | head -3
+          echo "=== File check ==="
+          ls -la springboot/init.sql
+          file springboot/init.sql
+          echo "=== First 3 lines of init.sql ==="
+          head -3 springboot/init.sql
+          echo "=== Network connectivity to MySQL ==="
+          nc -zv 127.0.0.1 3307 2>&1 || echo "nc not available, try timeout"
+          timeout 5 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/3307' 2>&1 && echo "TCP 3307 reachable" || echo "TCP 3307 NOT reachable"
+
       - name: Install MySQL Client
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq mysql-client
+          set -ex
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+          which mysql
+          mysql --version
 
       - name: Wait for MySQL Ready
         run: |
+          set -ex
           for i in $(seq 1 30); do
-            if mysqladmin ping -h 127.0.0.1 -P 3307 -uroot -proot --silent 2>/dev/null; then
+            if mysqladmin ping -h 127.0.0.1 -P 3307 -uroot -proot --silent 2>&1; then
               echo "[OK] MySQL ready (${i}x2s)"
               exit 0
             fi
+            echo "ping attempt $i failed, sleep 2s"
             sleep 2
           done
           echo "[FAIL] MySQL startup timeout"
+          # 输出容器日志
+          docker logs $(docker ps -q --filter ancestor=mysql:8.0) 2>&1 | tail -30
           exit 1
 
       - name: Import Database Schema
         run: |
-          if [ -f "springboot/init.sql" ]; then
-            mysql -h 127.0.0.1 -P 3307 -uroot -proot xm_shopping_manager < springboot/init.sql
-            echo "[DB] Imported from init.sql"
-            mysql -h 127.0.0.1 -P 3307 -uroot -proot -e "USE xm_shopping_manager; SHOW TABLES;"
-          else
-            echo "[DB] No init.sql found"
-            exit 1
-          fi
+          set -ex
+          ls -la springboot/init.sql
+          # 加 --verbose 看导入进度，stderr 也输出
+          mysql --verbose -h 127.0.0.1 -P 3307 -uroot -proot xm_shopping_manager < springboot/init.sql 2>&1 | tail -30
+          echo "[DB] Imported from init.sql"
+          mysql -h 127.0.0.1 -P 3307 -uroot -proot -e "USE xm_shopping_manager; SHOW TABLES;"
 
       - name: Set up JDK 11
         uses: actions/setup-java@v4
