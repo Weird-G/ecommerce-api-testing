@@ -271,8 +271,11 @@ jobs:
           ALLURE_VER=2.30.0
           wget -q https://github.com/allure-framework/allure2/releases/download/${ALLURE_VER}/allure-${ALLURE_VER}.tgz
           tar -xzf allure-${ALLURE_VER}.tgz
-          sudo mv allure-${ALLURE_VER}/bin/allure /usr/local/bin/allure
-          sudo chmod +x /usr/local/bin/allure
+          # 移动整个目录到 /opt/allure，bin/allure 启动脚本依赖同目录的 lib/*.jar
+          # 不能只 mv bin/allure，否则 ClassNotFoundException: io.qameta.allure.CommandLine
+          sudo mv allure-${ALLURE_VER} /opt/allure
+          sudo chmod +x /opt/allure/bin/allure
+          sudo ln -sf /opt/allure/bin/allure /usr/local/bin/allure
           allure --version
 
       - name: Configure GitHub Pages
