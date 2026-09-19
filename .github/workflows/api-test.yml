@@ -262,21 +262,33 @@ jobs:
           name: allure-results
           path: allure-results
 
+      - name: Setup Allure CLI (手动安装避免 OpenJDK 8 EOL 问题)
+        run: |
+          # simple-elf/allure-report-action@v1.6 依赖 openjdk:8-jre-alpine，已从 Docker Hub 移除
+          # 改为手动装 allure 2.30 + 默认 JRE
+          sudo apt-get update -qq
+          sudo apt-get install -y default-jre
+          ALLURE_VER=2.30.0
+          wget -q https://github.com/allure-framework/allure2/releases/download/${ALLURE_VER}/allure-${ALLURE_VER}.tgz
+          tar -xzf allure-${ALLURE_VER}.tgz
+          sudo mv allure-${ALLURE_VER}/bin/allure /usr/local/bin/allure
+          sudo chmod +x /usr/local/bin/allure
+          allure --version
+
       - name: Configure GitHub Pages
         id: pages
         uses: actions/configure-pages@v4
 
       - name: Generate Allure HTML Report
-        uses: simple-elf/allure-report-action@v1.6
-        with:
-          allure_results: allure-results
-          gh_pages: gh-pages
-          allure_history: allure-history
-          subfolder: allure
+        run: |
+          mkdir -p allure-history/allure
+          allure generate allure-results -o allure-history/allure --clean
+          echo "Allure HTML generated at allure-history/allure/"
 
       - name: Deploy Allure Report to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-history
           destination_dir: allure
+          keep_files: true
