@@ -91,11 +91,29 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Install MySQL Client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mysql-client
+
+      - name: Wait for MySQL Ready
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3307 -uroot -proot --silent 2>/dev/null; then
+              echo "[OK] MySQL ready (${i}x2s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "[FAIL] MySQL startup timeout"
+          exit 1
+
       - name: Import Database Schema
         run: |
           if [ -f "springboot/init.sql" ]; then
             mysql -h 127.0.0.1 -P 3307 -uroot -proot xm_shopping_manager < springboot/init.sql
             echo "[DB] Imported from init.sql"
+            mysql -h 127.0.0.1 -P 3307 -uroot -proot -e "USE xm_shopping_manager; SHOW TABLES;"
           else
             echo "[DB] No init.sql found"
             exit 1
